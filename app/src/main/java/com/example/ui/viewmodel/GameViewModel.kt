@@ -6,16 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.audio.SoundManager
 import com.example.data.HighScoreRepository
 import com.example.game.engine.GameEngine
-import com.example.game.entity.PowerUpType
 import com.example.game.state.GameState
 import com.example.game.state.GameUiState
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
@@ -26,9 +22,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
-
-    private var gameLoopJob: Job? = null
-    private var lastFrameTimeNanos: Long = 0L
 
     init {
         // Collect persistent high score from DataStore
@@ -76,7 +69,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 level = 1
             )
         }
-        startGameLoop()
+        engine.startLoop(viewModelScope) {
+            syncUiState()
+        }
         syncUiState()
     }
 
@@ -94,13 +89,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 level = nextLvl
             )
         }
-        startGameLoop()
+        engine.startLoop(viewModelScope) {
+            syncUiState()
+        }
         syncUiState()
     }
 
     fun pauseGame() {
         if (_uiState.value.gameState == GameState.PLAYING) {
-            stopGameLoop()
+            engine.pauseLoop()
             _uiState.update { it.copy(gameState = GameState.PAUSED) }
         }
     }
@@ -108,12 +105,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun resumeGame() {
         if (_uiState.value.gameState == GameState.PAUSED) {
             _uiState.update { it.copy(gameState = GameState.PLAYING) }
-            startGameLoop()
+            engine.resumeLoop()
         }
     }
 
     fun onAppBackgrounded() {
-        // Automatically pause game when app moves to background
         pauseGame()
     }
 
@@ -126,35 +122,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleMute() {
         soundManager.isMuted = !soundManager.isMuted
         _uiState.update { it.copy(isMuted = soundManager.isMuted) }
-    }
-
-    private fun startGameLoop() {
-        gameLoopJob?.cancel()
-        lastFrameTimeNanos = System.nanoTime()
-
-        gameLoopJob = viewModelScope.launch {
-            while (isActive && _uiState.value.gameState == GameState.PLAYING) {
-                val now = System.nanoTime()
-                val deltaNanos = now - lastFrameTimeNanos
-                lastFrameTimeNanos = now
-
-                val dtSeconds = (deltaNanos / 1_000_000_000f).coerceIn(0.001f, 0.033f)
-
-                // Advance game physics
-                engine.step(dtSeconds)
-
-                // Periodically update reactive state
-                syncUiState()
-
-                // Target ~60 FPS update cycle
-                delay(16L)
-            }
-        }
-    }
-
-    private fun stopGameLoop() {
-        gameLoopJob?.cancel()
-        gameLoopJob = null
     }
 
     private fun syncUiState() {
@@ -177,7 +144,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun handleGameOver() {
-        stopGameLoop()
         soundManager.play(SoundManager.SoundEvent.GAME_OVER)
         val finalScore = engine.score
 
@@ -194,9 +160,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun handleVictory() {
-        stopGameLoop()
         soundManager.play(SoundManager.SoundEvent.VICTORY)
-        val finalScore = engine.score + 500 // Completion bonus
+        val finalScore = engine.score + 500
 
         viewModelScope.launch {
             val isRecord = highScoreRepo.saveHighScoreIfGreater(finalScore)
@@ -212,7 +177,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        stopGameLoop()
+        engine.stopLoop()
         soundManager.release()
     }
 }
