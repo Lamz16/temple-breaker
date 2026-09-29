@@ -29,5 +29,7 @@ data class GameUiState(
     val totalBricks: Int = 0,
     val level: Int = 1,
     val activePowerUps: List<ActivePowerUp> = emptyList(),
-    val isMuted: Boolean = false
+    val isMuted: Boolean = false,
+    // Changes every simulation frame so Compose redraws the Canvas after mutable engine entities move.
+    val frameId: Long = 0L
 )

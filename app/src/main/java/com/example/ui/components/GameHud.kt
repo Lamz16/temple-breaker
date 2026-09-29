@@ -226,7 +226,7 @@ fun GameHud(
 
             // Brick count
             Text(
-                text = "BATA: ${uiState.bricksRemaining}/${uiState.totalBricks}",
+                text = "ORBIT: ${uiState.bricksRemaining}/${uiState.totalBricks}",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextMuted,

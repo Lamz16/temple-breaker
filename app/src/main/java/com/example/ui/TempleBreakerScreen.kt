@@ -58,6 +58,7 @@ fun TempleBreakerScreen(
             // Main Interactive Game Canvas
             GameCanvas(
                 engine = viewModel.engine,
+                frameId = uiState.frameId,
                 onPaddleMove = { x -> viewModel.onPaddleMove(x) },
                 onSizeChanged = { w, h -> viewModel.onCanvasSizeChanged(w, h) },
                 modifier = Modifier.fillMaxSize()

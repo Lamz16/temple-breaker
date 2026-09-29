@@ -138,7 +138,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 bricksRemaining = remainingBricks,
                 totalBricks = engine.bricks.size,
                 level = engine.level,
-                activePowerUps = engine.activePowerUps.map { p -> p.copy() }
+                activePowerUps = engine.activePowerUps.map { p -> p.copy() },
+                frameId = it.frameId + 1
             )
         }
     }

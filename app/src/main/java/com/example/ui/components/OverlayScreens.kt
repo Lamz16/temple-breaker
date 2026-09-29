@@ -90,7 +90,7 @@ fun ReadyOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xE6100C09))
+            .background(Color(0xE6091026))
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -99,7 +99,7 @@ fun ReadyOverlay(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Ancient Temple Emblem
+            // Galactic launch emblem
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -115,7 +115,7 @@ fun ReadyOverlay(
                 Icon(
                     imageVector = Icons.Default.EmojiEvents,
                     contentDescription = null,
-                    tint = Color(0xFF261800),
+                    tint = Color(0xFF17132E),
                     modifier = Modifier.size(46.dp)
                 )
             }
@@ -123,7 +123,7 @@ fun ReadyOverlay(
             Spacer(modifier = Modifier.height(18.dp))
 
             Text(
-                text = "TEMPLE BREAKER",
+                text = "NEBULA BREAKER",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 3.sp,
@@ -132,7 +132,7 @@ fun ReadyOverlay(
             )
 
             Text(
-                text = "Ancient Ruins & Sacred Relics",
+                text = "Soft Galactic Arcade",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = MysticCyan,
@@ -189,7 +189,7 @@ fun ReadyOverlay(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "TREASURE POWER-UPS",
+                        text = "COSMIC POWER-UPS",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = TempleGold,
@@ -198,22 +198,22 @@ fun ReadyOverlay(
                     Spacer(modifier = Modifier.height(8.dp))
                     PowerUpInfoRow(
                         icon = Icons.Default.HourglassTop,
-                        title = "Jam Pasir Ajaib",
-                        desc = "Kecepatan bola meningkat (5s)",
+                        title = "Photon Drive",
+                        desc = "Kecepatan orb meningkat (5s)",
                         color = SacredAmber
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     PowerUpInfoRow(
                         icon = Icons.Default.Star,
-                        title = "Kristal Kembar",
-                        desc = "+2 Bola baru tambahan",
+                        title = "Twin Orbs",
+                        desc = "+2 orb tambahan",
                         color = MysticCyan
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     PowerUpInfoRow(
                         icon = Icons.Default.Shield,
-                        title = "Papan Pusaka",
-                        desc = "Lebar paddle bertambah (7s)",
+                        title = "Nova Field",
+                        desc = "Paddle melebar (7s)",
                         color = SacredEmerald
                     )
                 }
@@ -244,7 +244,7 @@ fun ReadyOverlay(
                 onClick = onStartGame,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = TempleGold,
-                    contentColor = Color(0xFF261800)
+                    contentColor = Color(0xFF17132E)
                 ),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
@@ -349,7 +349,7 @@ fun PauseOverlay(
                     onClick = onResume,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TempleGold,
-                        contentColor = Color(0xFF261800)
+                        contentColor = Color(0xFF17132E)
                     ),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -430,7 +430,7 @@ fun GameOverOverlay(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Semua bola jatuh ke dalam jurang kuil!",
+                    text = "Semua orb tersesat di luar galaksi!",
                     fontSize = 13.sp,
                     color = TextMuted,
                     textAlign = TextAlign.Center
@@ -494,7 +494,7 @@ fun GameOverOverlay(
                     onClick = onRestart,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TempleGold,
-                        contentColor = Color(0xFF261800)
+                        contentColor = Color(0xFF17132E)
                     ),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -546,7 +546,7 @@ fun VictoryOverlay(
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
-                                listOf(SacredEmerald, Color(0xFF00796B))
+                                listOf(SacredEmerald, Color(0xFF4C9F91))
                             )
                         ),
                     contentAlignment = Alignment.Center

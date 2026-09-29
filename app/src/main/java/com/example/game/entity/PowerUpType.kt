@@ -10,24 +10,24 @@ enum class PowerUpType(
     val secondaryColor: Color
 ) {
     SPEED_BOOST(
-        title = "Jam Pasir Ajaib",
+        title = "Photon Drive",
         description = "Speed Boost",
         durationSeconds = 5.0f,
-        primaryColor = Color(0xFFFFB300), // Amber Gold
-        secondaryColor = Color(0xFFFF6F00) // Deep Orange
+        primaryColor = Color(0xFFFFB4C8),
+        secondaryColor = Color(0xFFE878A3)
     ),
     MULTI_BALL(
-        title = "Kristal Kembar",
+        title = "Twin Orbs",
         description = "Multi Ball (+2 Bola)",
         durationSeconds = 0f, // Instant permanent addition until lost
-        primaryColor = Color(0xFF00E5FF), // Cyan
-        secondaryColor = Color(0xFFD500F9) // Purple Magenta
+        primaryColor = Color(0xFF82D8FF),
+        secondaryColor = Color(0xFFC7AEFF)
     ),
     PADDLE_EXPAND(
-        title = "Papan Pusaka",
+        title = "Nova Field",
         description = "Papan Melebar",
         durationSeconds = 7.0f,
-        primaryColor = Color(0xFF00E676), // Jade Emerald
-        secondaryColor = Color(0xFFFFD700) // Gold
+        primaryColor = Color(0xFF8BE1C2),
+        secondaryColor = Color(0xFFE9E2FF)
     )
 }

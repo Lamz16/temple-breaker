@@ -14,26 +14,26 @@ enum class BrickType(
     NORMAL(
         maxDurability = 1,
         scoreValue = 100,
-        primaryColor = Color(0xFFD4A359), // Sandstone Amber
-        highlightColor = Color(0xFFFFE082),
-        shadowColor = Color(0xFF795548),
-        label = "Bata Kuil"
+        primaryColor = Color(0xFF8998E8),
+        highlightColor = Color(0xFFC9D3FF),
+        shadowColor = Color(0xFF46528F),
+        label = "Orbital Panel"
     ),
     STRONG(
         maxDurability = 2,
         scoreValue = 200,
-        primaryColor = Color(0xFF00ACC1), // Lapis Lazuli Gem
-        highlightColor = Color(0xFF80DEEA),
-        shadowColor = Color(0xFF006064),
-        label = "Batu Safir"
+        primaryColor = Color(0xFF5DB9DB),
+        highlightColor = Color(0xFFB9EDFF),
+        shadowColor = Color(0xFF286583),
+        label = "Ion Panel"
     ),
     ANCIENT(
         maxDurability = 3,
         scoreValue = 300,
-        primaryColor = Color(0xFFD81B60), // Ruby Rune Stone
-        highlightColor = Color(0xFFFF80AB),
-        shadowColor = Color(0xFF880E4F),
-        label = "Batu Kuno"
+        primaryColor = Color(0xFFC584D8),
+        highlightColor = Color(0xFFF0C5FF),
+        shadowColor = Color(0xFF70427F),
+        label = "Nebula Core"
     )
 }
 

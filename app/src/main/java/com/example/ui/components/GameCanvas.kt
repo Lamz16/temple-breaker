@@ -34,6 +34,7 @@ import kotlin.math.sin
 @Composable
 fun GameCanvas(
     engine: GameEngine,
+    frameId: Long,
     onPaddleMove: (Float) -> Unit,
     onSizeChanged: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
@@ -59,10 +60,15 @@ fun GameCanvas(
                 }
             }
     ) {
+        // Capture the frame value in this draw lambda. Engine entities are mutable objects, so
+        // their field changes alone are not observable by Compose.
+        @Suppress("UNUSED_VARIABLE")
+        val currentFrame = frameId
+
         val width = size.width
         val height = size.height
 
-        // 1. Draw Ancient Temple background
+        // 1. Draw soft galaxy background
         drawTempleBackground(width, height)
 
         // 2. Draw Bricks
@@ -82,7 +88,7 @@ fun GameCanvas(
             drawParticle(particle)
         }
 
-        // 5. Draw Paddle (Sacred Ancient Slab)
+        // 5. Draw paddle (sleek starship hull)
         drawTemplePaddle(engine.paddle)
 
         // 6. Draw Balls (Radiant Glowing Orbs)
@@ -94,36 +100,38 @@ fun GameCanvas(
 }
 
 private fun DrawScope.drawTempleBackground(width: Float, height: Float) {
-    // Deep stone background with vertical ancient chamber gradient
+    // Deep navy space with soft violet and cyan nebula light.
     val backgroundBrush = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF0F0B08),
-            Color(0xFF17120D),
-            Color(0xFF1E1710),
-            Color(0xFF120E0A)
+            Color(0xFF091126),
+            Color(0xFF11193A),
+            Color(0xFF171642),
+            Color(0xFF080F23)
         )
     )
     drawRect(brush = backgroundBrush, size = Size(width, height))
 
-    // Subtle stone chamber column lines at edges
-    val columnWidth = width * 0.035f
-    val pillarBrush = Brush.horizontalGradient(
-        colors = listOf(Color(0xFF2E2218), Color(0xFF15100B))
+    val violetNebula = Brush.radialGradient(
+        colors = listOf(Color(0x337C61D9), Color(0x117C61D9), Color.Transparent),
+        center = Offset(width * 0.16f, height * 0.34f),
+        radius = width * 0.85f
     )
-    drawRect(brush = pillarBrush, topLeft = Offset(0f, 0f), size = Size(columnWidth, height))
-    drawRect(
-        brush = Brush.horizontalGradient(listOf(Color(0xFF15100B), Color(0xFF2E2218))),
-        topLeft = Offset(width - columnWidth, 0f),
-        size = Size(columnWidth, height)
+    val cyanNebula = Brush.radialGradient(
+        colors = listOf(Color(0x2447C8FF), Color.Transparent),
+        center = Offset(width * 0.88f, height * 0.7f),
+        radius = width * 0.72f
     )
+    drawRect(brush = violetNebula, size = Size(width, height))
+    drawRect(brush = cyanNebula, size = Size(width, height))
 
-    // Subtle bottom torchlight warmth
-    val torchGlow = Brush.radialGradient(
-        colors = listOf(Color(0x22FF8F00), Color(0x00FF8F00)),
-        center = Offset(width / 2f, height),
-        radius = height * 0.45f
-    )
-    drawRect(brush = torchGlow, size = Size(width, height))
+    // Deterministic star field: it stays serene rather than flickering between frames.
+    repeat(52) { index ->
+        val starX = ((index * 73) % 101) / 100f * width
+        val starY = ((index * 47 + 19) % 137) / 136f * height
+        val radius = if (index % 9 == 0) 2.2f else 1.05f
+        val alpha = if (index % 9 == 0) 0.72f else 0.34f
+        drawCircle(Color(0xFFEAF2FF).copy(alpha = alpha), radius, Offset(starX, starY))
+    }
 }
 
 private fun DrawScope.drawTempleBrick(brick: Brick) {
@@ -162,12 +170,12 @@ private fun DrawScope.drawTempleBrick(brick: Brick) {
         style = Stroke(width = 3.5f)
     )
 
-    // Carved ancient symbol or rune inside brick
+    // Minimal diamond circuit mark.
     val centerX = rect.center.x
     val centerY = rect.center.y
     val symbolSize = (rect.height * 0.32f).coerceAtMost(14f)
 
-    // Small golden rune diamond in center
+    // Small luminous diamond in center
     val runePath = Path().apply {
         moveTo(centerX, centerY - symbolSize)
         lineTo(centerX + symbolSize, centerY)
@@ -216,9 +224,9 @@ private fun DrawScope.drawTemplePaddle(paddle: Paddle) {
     val topLeft = Offset(paddle.left, paddle.top)
     val paddleSize = Size(paddle.currentWidth, paddle.height)
 
-    // Outer glow
+    // Soft engine glow
     val glowBrush = Brush.radialGradient(
-        colors = listOf(Color(0x66FFC107), Color(0x00FFC107)),
+        colors = listOf(Color(0x6682D8FF), Color(0x0082D8FF)),
         center = Offset(paddle.centerX, paddle.top + paddle.height / 2f),
         radius = paddle.currentWidth * 0.6f
     )
@@ -229,9 +237,9 @@ private fun DrawScope.drawTemplePaddle(paddle: Paddle) {
         cornerRadius = CornerRadius(18f, 18f)
     )
 
-    // Paddle body (Golden Relic with gradient)
+    // Paddle body with a calm, glassy starship finish
     val paddleBrush = Brush.verticalGradient(
-        colors = listOf(TempleGoldLight, TempleGold, Color(0xFFC79100)),
+        colors = listOf(TempleGoldLight, TempleGold, Color(0xFF7668B7)),
         startY = paddle.top,
         endY = paddle.bottom
     )
@@ -244,7 +252,7 @@ private fun DrawScope.drawTemplePaddle(paddle: Paddle) {
 
     // Bevel border
     drawRoundRect(
-        color = Color(0xFFFFF9C4),
+        color = Color(0xFFE7F2FF),
         topLeft = topLeft,
         size = paddleSize,
         cornerRadius = corner,
