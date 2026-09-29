@@ -1,4 +1,12 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Properties
+
+val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
+val releaseKeystoreProperties = Properties().apply {
+  if (releaseKeystorePropertiesFile.exists()) {
+    releaseKeystorePropertiesFile.inputStream().use(::load)
+  }
+}
 
 plugins {
   alias(libs.plugins.android.application)
@@ -22,12 +30,22 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  signingConfigs {
+    create("release") {
+      storeFile = releaseKeystoreProperties.getProperty("storeFile")?.let { rootProject.file(it) }
+      storePassword = releaseKeystoreProperties.getProperty("storePassword")
+      keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+      keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+    }
+  }
+
   buildTypes {
     release {
       isCrunchPngs = false
       // R8 runs only for release artifacts; debug stays fast for iteration.
       isMinifyEnabled = true
       isShrinkResources = true
+      signingConfig = signingConfigs.getByName("release")
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
   }
