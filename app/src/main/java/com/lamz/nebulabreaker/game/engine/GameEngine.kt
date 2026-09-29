@@ -1,0 +1,568 @@
+package com.lamz.nebulabreaker.game.engine
+
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import com.lamz.nebulabreaker.game.collision.CollisionSystem
+import com.lamz.nebulabreaker.game.entity.Ball
+import com.lamz.nebulabreaker.game.entity.Brick
+import com.lamz.nebulabreaker.game.entity.BrickType
+import com.lamz.nebulabreaker.game.entity.Paddle
+import com.lamz.nebulabreaker.game.entity.Particle
+import com.lamz.nebulabreaker.game.entity.PowerUpType
+import com.lamz.nebulabreaker.game.entity.Treasure
+import com.lamz.nebulabreaker.game.state.ActivePowerUp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
+
+/**
+ * Core GameEngine responsible for:
+ * - Coroutine-based game loop with real-time frame delta timing
+ * - Managing entities (Ball, Paddle, Brick, Treasure, Particle)
+ * - Physics simulation, collisions, and power-up updates
+ */
+class GameEngine {
+
+    var arenaWidth: Float = 1080f
+        private set
+    var arenaHeight: Float = 1920f
+        private set
+
+    val balls = mutableListOf<Ball>()
+    val paddle = Paddle()
+    val bricks = mutableListOf<Brick>()
+    val treasures = mutableListOf<Treasure>()
+    val particles = mutableListOf<Particle>()
+    val activePowerUps = mutableListOf<ActivePowerUp>()
+
+    var score: Int = 0
+        private set
+    var level: Int = 1
+        private set
+
+    private var nextBallId = 1
+    private var nextTreasureId = 1
+    private var phaseShieldCharges = 0
+
+    // Coroutine-based frame loop variables
+    private var loopJob: Job? = null
+    private var isLoopPaused: Boolean = false
+    private var lastFrameTimeNanos: Long = 0L
+
+    val isRunning: Boolean
+        get() = loopJob?.isActive == true && !isLoopPaused
+
+    // Event callbacks
+    var onBallHitPaddle: (() -> Unit)? = null
+    var onBallHitBrick: (() -> Unit)? = null
+    var onBrickDestroyed: ((scoreGained: Int) -> Unit)? = null
+    var onTreasureCollected: ((PowerUpType) -> Unit)? = null
+    var onGameOver: (() -> Unit)? = null
+    var onVictory: (() -> Unit)? = null
+
+    /**
+     * Updates the arena dimensions and adjusts paddle and entity dimensions proportionally.
+     */
+    fun setArenaDimensions(width: Float, height: Float) {
+        if (width <= 0f || height <= 0f) return
+        val changed = (width != arenaWidth || height != arenaHeight)
+        arenaWidth = width
+        arenaHeight = height
+
+        val basePaddleW = (width * 0.28f).coerceIn(120f, 260f)
+        val expandedPaddleW = (width * 0.44f).coerceIn(180f, 380f)
+        val paddleH = (height * 0.022f).coerceIn(18f, 32f)
+        val paddleY = height - paddleH - (height * 0.09f)
+
+        if (paddle.centerX == 0f) {
+            paddle.centerX = width / 2f
+        }
+        paddle.reset(
+            initialCenterX = paddle.centerX,
+            initialY = paddleY,
+            width = basePaddleW,
+            height = paddleH,
+            expanded = expandedPaddleW
+        )
+        paddle.clampPosition(0f, arenaWidth)
+
+        if (changed && bricks.isEmpty()) {
+            setupLevel(level)
+            resetBallOnPaddle()
+        }
+    }
+
+    /**
+     * Starts a new game session with a fresh brick layout and initial ball on paddle.
+     */
+    fun startNewGame(targetLevel: Int = 1) {
+        score = 0
+        level = targetLevel
+        activePowerUps.clear()
+        treasures.clear()
+        particles.clear()
+        phaseShieldCharges = 0
+        paddle.targetWidth = paddle.baseWidth
+        paddle.currentWidth = paddle.baseWidth
+        paddle.centerX = arenaWidth / 2f
+
+        setupLevel(level)
+        resetBallOnPaddle()
+        launchInitialBall()
+    }
+
+    /**
+     * Places the initial ball in contact with the paddle before launching.
+     */
+    fun resetBallOnPaddle() {
+        balls.clear()
+        val radius = (arenaWidth * 0.024f).coerceIn(10f, 20f)
+        val initialBall = Ball(
+            id = nextBallId++,
+            radius = radius
+        )
+        initialBall.attachToPaddle(paddle)
+        balls.add(initialBall)
+    }
+
+    /**
+     * Launches the initial ball upward with slight random angle.
+     */
+    fun launchInitialBall() {
+        if (balls.isEmpty()) resetBallOnPaddle()
+        val baseSpeed = (arenaHeight * 0.42f).coerceIn(460f, 820f)
+        val ball = balls.first()
+        val angleDeg = Random.nextFloat() * 40f - 20f // -20° to +20° from vertical
+        ball.launch(baseSpeed, angleDeg)
+        ball.speedMultiplier = getSpeedMultiplier()
+    }
+
+    /**
+     * Responds to user horizontal touch drag, keeping paddle within arena bounds.
+     */
+    fun movePaddleTo(targetX: Float) {
+        paddle.moveTo(targetX, 0f, arenaWidth)
+
+        // If ball hasn't launched yet, keep it attached to the moving paddle
+        for (ball in balls) {
+            if (!ball.isLaunched) {
+                ball.attachToPaddle(paddle)
+            }
+        }
+    }
+
+    /** Moves the paddle from device roll: -1 is left tilt and +1 is right tilt. */
+    fun movePaddleWithTilt(normalizedTilt: Float) {
+        val targetX = arenaWidth / 2f + normalizedTilt.coerceIn(-1f, 1f) * arenaWidth * 0.42f
+        movePaddleTo(targetX)
+    }
+
+    /**
+     * Starts the coroutine-based game loop for real-time frame timing (~60 FPS).
+     */
+    fun startLoop(scope: CoroutineScope, onFrame: (() -> Unit)? = null) {
+        stopLoop()
+        isLoopPaused = false
+        lastFrameTimeNanos = System.nanoTime()
+
+        loopJob = scope.launch {
+            while (isActive) {
+                if (!isLoopPaused) {
+                    val now = System.nanoTime()
+                    val deltaNanos = now - lastFrameTimeNanos
+                    lastFrameTimeNanos = now
+
+                    // Frame delta time in seconds, capped to 33ms to avoid tunneling during frame drops
+                    val dtSeconds = (deltaNanos / 1_000_000_000f).coerceIn(0.001f, 0.033f)
+
+                    step(dtSeconds)
+                    onFrame?.invoke()
+                } else {
+                    lastFrameTimeNanos = System.nanoTime()
+                }
+
+                delay(16L) // ~60 FPS frame rate pacing
+            }
+        }
+    }
+
+    fun pauseLoop() {
+        isLoopPaused = true
+    }
+
+    fun resumeLoop() {
+        if (isLoopPaused) {
+            lastFrameTimeNanos = System.nanoTime()
+            isLoopPaused = false
+        }
+    }
+
+    fun stopLoop() {
+        loopJob?.cancel()
+        loopJob = null
+        isLoopPaused = false
+    }
+
+    /**
+     * Advances the simulation by delta time (seconds).
+     */
+    fun step(dtSeconds: Float) {
+        val dt = dtSeconds.coerceIn(0.001f, 0.033f)
+
+        // 1. Update power-up durations
+        updatePowerUps(dt)
+
+        // 2. Smoothly animate paddle width
+        paddle.updateWidth(dt)
+        paddle.clampPosition(0f, arenaWidth)
+
+        // 3. Move and collide balls
+        val ballsIterator = balls.iterator()
+        while (ballsIterator.hasNext()) {
+            val ball = ballsIterator.next()
+            ball.speedMultiplier = getSpeedMultiplier()
+            ball.step(dt)
+
+            // Arena boundaries
+            val isOutOfBounds = CollisionSystem.checkBoundaryCollision(ball, arenaWidth, arenaHeight)
+            if (isOutOfBounds) {
+                if (phaseShieldCharges > 0) {
+                    phaseShieldCharges--
+                    ball.y = arenaHeight - ball.radius - 2f
+                    ball.vy = -kotlin.math.abs(ball.vy).coerceAtLeast(420f)
+                } else {
+                    ballsIterator.remove()
+                }
+                continue
+            }
+
+            // Paddle collision with dynamic reflection angle
+            if (CollisionSystem.checkPaddleCollision(ball, paddle)) {
+                onBallHitPaddle?.invoke()
+                spawnPaddleHitSparks(ball.x, paddle.top)
+            }
+
+            // Brick collisions
+            for (brick in bricks) {
+                if (brick.isDestroyed) continue
+
+                if (CollisionSystem.checkBrickCollision(ball, brick)) {
+                    val wasDestroyed = brick.hit()
+                    if (wasDestroyed) {
+                        score += brick.type.scoreValue
+                        onBrickDestroyed?.invoke(brick.type.scoreValue)
+                        spawnBrickDebris(brick)
+
+                        // Spawn falling treasure if present
+                        if (brick.containsPowerUp != null) {
+                            spawnTreasure(brick.rect.center.x, brick.rect.center.y, brick.containsPowerUp)
+                        }
+                    } else {
+                        onBallHitBrick?.invoke()
+                        spawnBrickImpactSparks(ball.x, ball.y, brick.type.highlightColor)
+                    }
+                    break // Prevent multi-brick hits in a single frame
+                }
+            }
+        }
+
+        // 4. Check lose condition
+        if (balls.isEmpty()) {
+            stopLoop()
+            onGameOver?.invoke()
+            return
+        }
+
+        // 5. Check victory condition
+        val remainingBricks = bricks.count { !it.isDestroyed }
+        if (remainingBricks == 0 && bricks.isNotEmpty()) {
+            stopLoop()
+            onVictory?.invoke()
+            return
+        }
+
+        // 6. Update falling treasures
+        val treasureIterator = treasures.iterator()
+        while (treasureIterator.hasNext()) {
+            val treasure = treasureIterator.next()
+            treasure.step(dt)
+
+            // Collected by paddle
+            if (CollisionSystem.checkTreasurePaddleCollision(treasure, paddle)) {
+                treasure.isCollected = true
+                applyPowerUp(treasure.type)
+                score += 150
+                onTreasureCollected?.invoke(treasure.type)
+                spawnTreasureCollectedBurst(treasure.x, paddle.top, treasure.type.primaryColor)
+                treasureIterator.remove()
+                continue
+            }
+
+            // Expired below screen
+            if (treasure.top > arenaHeight) {
+                treasure.isExpired = true
+                treasureIterator.remove()
+            }
+        }
+
+        // 7. Update particles
+        val particleIterator = particles.iterator()
+        while (particleIterator.hasNext()) {
+            val p = particleIterator.next()
+            p.step(dt)
+            if (p.isDead) {
+                particleIterator.remove()
+            }
+        }
+    }
+
+    fun setupLevel(lvl: Int) {
+        bricks.clear()
+        level = lvl
+
+        val cols = 10
+        val rows = 11
+        val topMargin = arenaHeight * 0.12f
+        val sidePadding = arenaWidth * 0.05f
+        val usableWidth = arenaWidth - (sidePadding * 2f)
+        val spacing = (arenaWidth * 0.010f).coerceIn(3f, 7f)
+        val brickWidth = (usableWidth - (spacing * (cols - 1))) / cols
+        val brickHeight = (arenaHeight * 0.022f).coerceIn(18f, 32f)
+
+        var brickId = 0
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val centerCol = cols / 2
+                val distanceFromCenter = kotlin.math.abs(c - centerCol)
+
+                // A compact orbital formation replaces the old temple silhouette.
+                val outerLimit = when (r) {
+                    0 -> 1
+                    1 -> 2
+                    2 -> 3
+                    else -> centerCol
+                }
+                if (distanceFromCenter > outerLimit) continue
+
+                val brickType = when {
+                    r < 2 -> BrickType.ANCIENT
+                    r < 5 -> BrickType.STRONG
+                    else -> BrickType.NORMAL
+                }
+
+                // Random power up chance
+                val powerUp = if (Random.nextFloat() < 0.34f) {
+                    PowerUpType.entries.random()
+                } else null
+
+                val left = sidePadding + c * (brickWidth + spacing)
+                val top = topMargin + r * (brickHeight + spacing)
+                val rect = Rect(left, top, left + brickWidth, top + brickHeight)
+
+                bricks.add(
+                    Brick(
+                        id = brickId++,
+                        row = r,
+                        col = c,
+                        rect = rect,
+                        type = brickType,
+                        currentDurability = brickType.maxDurability,
+                        containsPowerUp = powerUp
+                    )
+                )
+            }
+        }
+    }
+
+    private fun applyPowerUp(type: PowerUpType) {
+        when (type) {
+            PowerUpType.SPEED_BOOST -> {
+                val existing = activePowerUps.find { it.type == PowerUpType.SPEED_BOOST }
+                if (existing != null) {
+                    existing.remainingSeconds = PowerUpType.SPEED_BOOST.durationSeconds
+                } else {
+                    activePowerUps.add(
+                        ActivePowerUp(
+                            type = PowerUpType.SPEED_BOOST,
+                            remainingSeconds = PowerUpType.SPEED_BOOST.durationSeconds,
+                            totalSeconds = PowerUpType.SPEED_BOOST.durationSeconds
+                        )
+                    )
+                }
+            }
+            PowerUpType.MULTI_BALL -> {
+                if (balls.isNotEmpty()) {
+                    val referenceBall = balls.first()
+                    val baseSpeed = referenceBall.speed().coerceAtLeast(500f)
+
+                    // Ball 2: angled left (-35 degrees)
+                    val ball2 = Ball(
+                        id = nextBallId++,
+                        x = referenceBall.x,
+                        y = referenceBall.y,
+                        radius = referenceBall.radius,
+                        speedMultiplier = getSpeedMultiplier(),
+                        isLaunched = true
+                    )
+                    ball2.launch(baseSpeed, -35f)
+
+                    // Ball 3: angled right (+35 degrees)
+                    val ball3 = Ball(
+                        id = nextBallId++,
+                        x = referenceBall.x,
+                        y = referenceBall.y,
+                        radius = referenceBall.radius,
+                        speedMultiplier = getSpeedMultiplier(),
+                        isLaunched = true
+                    )
+                    ball3.launch(baseSpeed, 35f)
+
+                    balls.add(ball2)
+                    balls.add(ball3)
+                }
+            }
+            PowerUpType.PADDLE_EXPAND -> {
+                paddle.targetWidth = paddle.expandedWidth
+                val existing = activePowerUps.find { it.type == PowerUpType.PADDLE_EXPAND }
+                if (existing != null) {
+                    existing.remainingSeconds = PowerUpType.PADDLE_EXPAND.durationSeconds
+                } else {
+                    activePowerUps.add(
+                        ActivePowerUp(
+                            type = PowerUpType.PADDLE_EXPAND,
+                            remainingSeconds = PowerUpType.PADDLE_EXPAND.durationSeconds,
+                            totalSeconds = PowerUpType.PADDLE_EXPAND.durationSeconds
+                        )
+                    )
+                }
+            }
+            PowerUpType.TIME_DILATION -> activateTimedPowerUp(PowerUpType.TIME_DILATION)
+            PowerUpType.STAR_CACHE -> score += 500
+            PowerUpType.PHASE_SHIELD -> phaseShieldCharges = (phaseShieldCharges + 1).coerceAtMost(3)
+        }
+    }
+
+    private fun activateTimedPowerUp(type: PowerUpType) {
+        val existing = activePowerUps.find { it.type == type }
+        if (existing != null) {
+            existing.remainingSeconds = type.durationSeconds
+        } else {
+            activePowerUps.add(ActivePowerUp(type, type.durationSeconds, type.durationSeconds))
+        }
+    }
+
+    private fun updatePowerUps(dt: Float) {
+        val iterator = activePowerUps.iterator()
+        while (iterator.hasNext()) {
+            val p = iterator.next()
+            p.remainingSeconds -= dt
+            if (p.remainingSeconds <= 0f) {
+                if (p.type == PowerUpType.PADDLE_EXPAND) {
+                    paddle.targetWidth = paddle.baseWidth
+                }
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun getSpeedMultiplier(): Float {
+        return when {
+            activePowerUps.any { it.type == PowerUpType.TIME_DILATION } -> 0.72f
+            activePowerUps.any { it.type == PowerUpType.SPEED_BOOST } -> 1.45f
+            else -> 1.0f
+        }
+    }
+
+    private fun spawnTreasure(x: Float, y: Float, type: PowerUpType) {
+        val fallSpeed = (arenaHeight * 0.16f).coerceIn(190f, 320f)
+        treasures.add(
+            Treasure(
+                id = nextTreasureId++,
+                x = x,
+                y = y,
+                vy = fallSpeed,
+                type = type
+            )
+        )
+    }
+
+    private fun spawnBrickDebris(brick: Brick) {
+        val count = 12
+        val centerX = brick.rect.center.x
+        val centerY = brick.rect.center.y
+        for (i in 0 until count) {
+            val angle = Random.nextFloat() * 2f * Math.PI.toFloat()
+            val speed = Random.nextFloat() * 280f + 60f
+            particles.add(
+                Particle(
+                    x = centerX + (Random.nextFloat() - 0.5f) * brick.rect.width * 0.6f,
+                    y = centerY + (Random.nextFloat() - 0.5f) * brick.rect.height * 0.6f,
+                    vx = cos(angle) * speed,
+                    vy = sin(angle) * speed - 60f,
+                    color = if (i % 2 == 0) brick.type.primaryColor else brick.type.highlightColor,
+                    size = Random.nextFloat() * 8f + 4f,
+                    maxLifetime = Random.nextFloat() * 0.35f + 0.35f
+                )
+            )
+        }
+    }
+
+    private fun spawnBrickImpactSparks(x: Float, y: Float, color: Color) {
+        for (i in 0 until 5) {
+            val angle = Random.nextFloat() * 2f * Math.PI.toFloat()
+            val speed = Random.nextFloat() * 140f + 40f
+            particles.add(
+                Particle(
+                    x = x,
+                    y = y,
+                    vx = cos(angle) * speed,
+                    vy = sin(angle) * speed,
+                    color = color,
+                    size = Random.nextFloat() * 5f + 2f,
+                    maxLifetime = 0.25f
+                )
+            )
+        }
+    }
+
+    private fun spawnPaddleHitSparks(x: Float, y: Float) {
+        for (i in 0 until 7) {
+            val angle = Math.toRadians((Random.nextFloat() * 120.0 + 210.0)).toFloat()
+            val speed = Random.nextFloat() * 180f + 80f
+            particles.add(
+                Particle(
+                    x = x,
+                    y = y,
+                    vx = cos(angle) * speed,
+                    vy = sin(angle) * speed,
+                    color = Color(0xFFFFD54F),
+                    size = Random.nextFloat() * 6f + 3f,
+                    maxLifetime = 0.3f
+                )
+            )
+        }
+    }
+
+    private fun spawnTreasureCollectedBurst(x: Float, y: Float, color: Color) {
+        for (i in 0 until 18) {
+            val angle = Random.nextFloat() * 2f * Math.PI.toFloat()
+            val speed = Random.nextFloat() * 240f + 80f
+            particles.add(
+                Particle(
+                    x = x,
+                    y = y,
+                    vx = cos(angle) * speed,
+                    vy = sin(angle) * speed,
+                    color = color,
+                    size = Random.nextFloat() * 8f + 4f,
+                    maxLifetime = 0.5f
+                )
+            )
+        }
+    }
+}

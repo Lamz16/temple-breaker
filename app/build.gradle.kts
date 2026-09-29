@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.lamz.nebulabreaker"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.templebreaker.hqwk"
+    applicationId = "com.lamz.nebulabreaker"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -25,7 +25,9 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // R8 runs only for release artifacts; debug stays fast for iteration.
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
   }

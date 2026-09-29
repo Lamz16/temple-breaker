@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Temple Breaker"
+rootProject.name = "Nebula Breaker"
 
 include(":app")
